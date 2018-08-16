@@ -31,6 +31,7 @@ headerName = convert(mockClassName) + '_H_'
 
 output = '#ifndef ' + headerName + '\n'
 output+= '#define ' + headerName + '\n'
+output+= '#include <gmock/gmock.h>\n\n'
 output+= '#include "' + interfaceFileName + '"\n\n\n'
 output+= 'class ' + mockClassName + ' : public ' + interfaceClassName + '\n{\n'
 output+= 'public:\n'
