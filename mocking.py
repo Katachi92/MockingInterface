@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 
 def countArgs(insideBrackets) :
     insideBrackets = insideBrackets.strip()
@@ -24,41 +25,72 @@ def convert(name):
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).upper()
 
-interfaceFileName = 'IExampleClass.h'
-interfaceClassName = interfaceFileName[0:interfaceFileName.rindex('.')]
-mockClassName = interfaceClassName[1:] + 'Mock'
-headerName = convert(mockClassName) + '_H_'
+class NecessaryNames:
+    interfaceFile = ''
+    interfaceClass = ''
+    mockClass = ''
+    header = ''
+    mockFile = ''
+    fileDir = ''
 
-output = '#ifndef ' + headerName + '\n'
-output+= '#define ' + headerName + '\n'
-output+= '#include <gmock/gmock.h>\n\n'
-output+= '#include "' + interfaceFileName + '"\n\n\n'
-output+= 'class ' + mockClassName + ' : public ' + interfaceClassName + '\n{\n'
-output+= 'public:\n'
+    def __init__(self, interfaceFilePath):
+        interfaceFileName = os.path.basename(interfaceFilePath)
+        self.isFileNameCorrect(interfaceFileName)
+        fileDir = os.path.dirname(interfaceFilePath)
+        print(fileDir)
+        self.interfaceFile = interfaceFileName
+        self.interfaceClass = self.interfaceFile[0:self.interfaceFile.rindex('.')]
+        self.mockClass = self.interfaceClass[1:] + 'Mock'
+        self.header = convert(self.mockClass) + '_H_'
+        self.mockFile = self.mockClass + '.h'
 
-with open(interfaceFileName) as f:
-    fileText = f.read()
+    def isFileNameCorrect(self, fileName):
+        if(None == re.match('^I.*\.h$', fileName)):
+            raise Exception('File has incorrect name')
+        return True
 
-expression = r'virtual\ (.*(<.*>))\ (?P<funcName>\S*)\((([^()]+(<.*>)?)*)\)( const)?( \= 0)?;'
+    def getInputFileDir(self):
+        return os.path.join(self.fileDir, self.interfaceFile)
 
-m = re.findall(expression, fileText)
+    def getOutputFileDir(self):
+        return os.path.join(self.fileDir, self.mockFile)
 
-for found in m :
-    line = 'MOCK_'
-    if found[6] == ' const':
-        line = line + 'CONST_'
+def main(argv):
+    interfaceFilePath = os.path.abspath(argv[0])
+    names = NecessaryNames(interfaceFilePath)
 
-    line = line + 'METHOD'
+    output = '#ifndef ' + names.header + '\n'
+    output+= '#define ' + names.header + '\n'
+    output+= '#include <gmock/gmock.h>\n\n'
+    output+= '#include "' + names.interfaceFile + '"\n\n'
+    output+= 'class ' + names.mockClass + ' : public ' + names.interfaceClass + '\n{\n'
+    output+= 'public:\n'
 
-    arguments = countArgs(found[3])
-    line = line + str(arguments)
+    with open(names.getInputFileDir()) as f:
+        fileText = f.read()
 
-    line = line + '(' + found[2] + ', ' + found[0] + '(' + found[3] + '));'
-    output+= '\t' + line + '\n'
+    virtualFunctionRegex = r'virtual\ (.*(<.*>))\ (?P<funcName>\S*)\((([^()]+(<.*>)?)*)\)( const)?( \= 0)?;'
 
-output+= '};\n\n'
-output+= '#endif // ' + headerName
+    matches = re.findall(virtualFunctionRegex, fileText)
 
-mockFileName = mockClassName + '.h'
-with open(mockFileName, 'w', encoding='utf-8') as f:
-    f.write(output)
+    for match in matches :
+        line = 'MOCK_'
+        if match[6] == ' const':
+            line = line + 'CONST_'
+
+        line = line + 'METHOD'
+
+        arguments = countArgs(match[3])
+        line = line + str(arguments)
+
+        line = line + '(' + match[2] + ', ' + match[0] + '(' + match[3] + '));'
+        output+= '\t' + line + '\n'
+
+    output+= '};\n\n'
+    output+= '#endif // ' + names.header
+
+    with open(names.getOutputFileDir(), 'w', encoding='utf-8') as f:
+        f.write(output)
+
+if __name__ == '__main__' :
+    main(sys.argv[1:])
